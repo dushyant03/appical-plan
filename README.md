@@ -104,6 +104,9 @@ I would be using GitHub Actions as my CI/CD tool in this case. Below are the poi
 Note: Adding a sample workflow to show how it would look, mainly for BE, as FE and mobile will be slightly different. And a basic arch diagram with FE and BE flow.
 
 ![screenshot](arch.jpg)
+![screenshot](deploy.png)
+
+
 
 
 ### Observability
