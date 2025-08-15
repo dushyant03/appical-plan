@@ -23,11 +23,11 @@ standardisation, no unified analytics tool.
 
 **AWS**: I chose AWS as it is one of the leading cloud providers and has great services and a huge community.
 
-**RDS PostgresSQL** - I chose a managed RDS instance as deploying a self-managed database and maintaining it is very difficult and a little outdated now. With powerful and cheap machines (Graviton), it's very easy to use a managed database.
+**RDS PostgreSQL** - I chose a managed RDS instance as deploying a self-managed database and maintaining it is very difficult and a little outdated now. With powerful and cheap machines (Graviton), it's very easy to use a managed database.
 
 **Github**: I chose GH for CI/CD as it provides great flexibility. Any CI/CD tool can do the job; some of the big players now are GH and GitLab.
 
-**Datadog**: As explained below, I chose Datadog as it provides a huge number of features out of the box. If set up correctly, the cost can be controlled. Usually, Datadog is known to be expensive; the choice is between saving cost or avoiding toil.
+**Datadog**: As explained below, I chose Datadog as it provides the whole suite of observability features out of the box like logging, APM, DB monitorning, RUM etc. If set up correctly, the cost can be controlled. Usually, Datadog is known to be expensive; the choice is between saving cost or avoiding toil.
 
 **Terraform** - I chose Terraform for IAC because this is one of the most powerful and cloud-agnostic tools. Extremely flexible and can be integrated easily with other applications, with again a huge community.
 
@@ -40,7 +40,6 @@ standardisation, no unified analytics tool.
 - Access management is not part of the solution but is an important component to keep in mind.
 - VPN setup has not been discussed here, but access to private resources like DBs and EKS clusters should be over a VPN.
 - DNS has not been discussed here, but a standard tool like Route 53 can be used to route traffic to the applications.
-
 
 
 ### Environments
@@ -102,7 +101,9 @@ I would be using GitHub Actions as my CI/CD tool in this case. Below are the poi
 - Unit & UI tests in CI
 - Build artifacts pushed to mobile testers
 
-Note: Adding a sample workflow to show how it would look, mainly for BE, as FE and mobile will be slightly different.
+Note: Adding a sample workflow to show how it would look, mainly for BE, as FE and mobile will be slightly different. And a basic arch diagram with FE and BE flow.
+
+![screenshot](arch.jpg)
 
 
 ### Observability
@@ -187,7 +188,17 @@ If the following points are properly addressed, risks will be minimal:
 - Helm provider for Terraform can sometimes be buggy  
 - Heavy reliance on AWS  
 - Datadog can get expensive if not monitored  
+- Managed RDS is an additional cost
 - GitHub private runners need maintenance since they are self-hosted
+
+**Cost Estimation:**
+- The cost for datadog can be only roughly estimated, it truly depends on the amount logs we send and retain. 
+    - 300 GB logs ×0.10$ =$30
+    - 300 GB ≈ 150 million events so 150million event * 1.70/1million = $255
+    - 2 DB hosts×70=$140
+    - 2 APM hosts×31=$62
+    - total 30 + 255 + 140 + 62 = $487/month
+- AWS cost can be found here in the repo `aws-cost.pdf`
 
 
 **PS:** ChatGPT was used in this assessment to only format and spell check, and topics around QA and mobile deployment. 
