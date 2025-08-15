@@ -1,0 +1,123 @@
+name: Build & Deploy 
+run-name: Build & Deploy | ${{ inputs.environment }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment'
+        required: true
+        default: 'develop'
+        type: choice
+        options:
+          - develop
+          - production
+
+      skip_apply:
+        description: 'Skip Apply (Plan Only)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_ECR_REPO: repo-name
+  DOCKER_CONTEXT_PATH: "Microservices"
+  TF_PLAN_FILE: terraform-plan.tfplan
+
+jobs:
+  Build-Push-Application-Image:
+    runs-on: ubuntu22.04-arm
+    environment: ${{ inputs.environment }}
+    outputs:
+      image_tag: ${{ github.sha }}
+    steps:
+      - name: Repository Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Configuring AWS Credentials
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          aws-region: 
+          role-to-assume: 
+          role-session-name: 
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: ${{ github.workspace }}/${{ env.DOCKER_CONTEXT_PATH }}
+          file: ${{ github.workspace }}/${{ env.DOCKER_FILE_PATH }}
+          platforms: linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.AWS_ECR_REPO }}:${{ github.sha }}
+          no-cache: false
+          load: false
+
+  Terragrunt-Plan:
+    needs: [Build-Push-Application-Image]
+    runs-on: gh-private-runners-${{ inputs.environment }}
+    environment: ${{ inputs.environment }}
+    outputs:
+      plan_result: ${{ steps.tf_plan.outputs.stdout }}
+      plan_exitcode: ${{ steps.tf_plan.outputs.exitcode }}
+    steps:
+      - name: Repository Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Checking ENV
+        run: |
+          env
+
+      - name: Set Docker image tag in Terragrunt
+        run: |
+          cd $(dirname ${{ env.HELM_TERRAGRUNT_HCL }})
+          echo "docker_image_tag = \"${{ needs.Build-Push-Application-Image.outputs.image_tag }}\"" > terraform.tfvars
+          cat terraform.tfvars
+
+      - name: Terragrunt Plan
+        id: tf_plan
+        env:
+          TF_PLAN_FILE: ${{ env.TF_PLAN_FILE }}
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          terraform --version
+          terragrunt --version
+          cd Microservices/deployment/terragrunt/"$ENVIRONMENT"/app/helm
+          git config --get-regexp url
+          terragrunt init
+          terragrunt validate
+          terragrunt plan -out=${{ env.TF_PLAN_FILE }}
+
+
+  Terragrunt-Apply:
+    needs: [Terragrunt-Plan, Build-Push-Application-Image]
+    if: ${{ inputs.skip_apply == false }}
+    runs-on: gh-private-runners-${{ inputs.environment }}
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Repository Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set Docker image tag in Terragrunt
+        run: |
+          cd $(dirname ${{ env.HELM_TERRAGRUNT_HCL }})
+          echo "docker_image_tag = \"${{ needs.Build-Push-Application-Image.outputs.image_tag }}\"" > terraform.tfvars
+          cat terraform.tfvars
+
+      - name: Apply Infrastructure Changes
+        env:
+          TERRAGRUNT_PATH: Microservices/deployment/terragrunt/${{ inputs.environment }}/app/helm
+        run: |
+          cd "$TERRAGRUNT_PATH"
+          terragrunt apply -auto-approve
